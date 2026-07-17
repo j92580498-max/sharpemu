@@ -251,7 +251,7 @@ public sealed partial class DirectExecutionBackend
 
 		public static NativeGuestExecutor? TryCreate(DirectExecutionBackend backend)
 		{
-			if (!EnsureKernel32Exports())
+			if (OperatingSystem.IsWindows() && !EnsureKernel32Exports())
 			{
 				return null;
 			}
