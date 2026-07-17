@@ -299,6 +299,10 @@ public sealed unsafe partial class DirectExecutionBackend
 		{
 			disposition = TryRecoverUnresolvedSentinel(&pointers);
 		}
+		if (disposition != -1 && signal == PosixSigAbort)
+		{
+			disposition = TryRecoverPosixStackAbort(&pointers);
+		}
 		if (disposition != -1 && !_posixSignalWarmup && _posixSignalBackend is { } backend)
 		{
 			disposition = backend.VectoredHandler(&pointers);
@@ -319,6 +323,39 @@ public sealed unsafe partial class DirectExecutionBackend
 			*(ulong*)(registers + offsets[i]) = ReadCtxU64(contextRecord, CTX_RAX + i * 8);
 		}
 		return true;
+	}
+
+	private static unsafe int TryRecoverPosixStackAbort(EXCEPTION_POINTERS* pointers)
+	{
+		var record = pointers->ExceptionRecord;
+		if (record == null || record->ExceptionCode != 1073741845u)
+		{
+			return 0;
+		}
+
+		var context = pointers->ContextRecord;
+		if (context == null || _posixSignalBackend == null)
+		{
+			return 0;
+		}
+
+		var rip = ReadCtxU64(context, CTX_RIP);
+		if (rip < 0x0000000800000000UL || rip >= 0x0000000840000000UL)
+		{
+			return 0;
+		}
+
+		var rsp = ReadCtxU64(context, CTX_RSP);
+		if (!TryGetPlausibleReturnFromStack(rsp, out var returnRip, out var nextRsp))
+		{
+			return 0;
+		}
+
+		WriteCtxU64(context, CTX_RSP, nextRsp);
+		WriteCtxU64(context, CTX_RIP, returnRip);
+		WriteCtxU64(context, CTX_RAX, 0);
+		Console.Error.WriteLine($"[LOADER][WARN] Recovered guest SIGABRT at 0x{rip:X16}, resumed at 0x{returnRip:X16}");
+		return -1;
 	}
 
 	private static byte* GetPosixRegisterBase(nint ucontext)
