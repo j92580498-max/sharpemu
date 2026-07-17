@@ -21,6 +21,9 @@ internal static unsafe class PosixHostStubs
     private static nint _queryPerformanceCounterStub;
     private static nint _switchToThreadStub;
     private static nint _sleepStub;
+    private static nint _workerWaitStub;
+    private static nint _workerSignalStub;
+    private static nint _workerExitStub;
 
     public static nint TlsGetValueStubAddress
     {
@@ -40,6 +43,35 @@ internal static unsafe class PosixHostStubs
     public static nint SleepStubAddress
     {
         get { EnsureInitialized(); return _sleepStub; }
+    }
+
+    public static bool TryCreateWorkerLoopStubs(out nint waitStub, out nint signalStub, out nint exitStub)
+    {
+        waitStub = 0;
+        signalStub = 0;
+        exitStub = 0;
+        try
+        {
+            lock (Gate)
+            {
+                if (_workerWaitStub == 0)
+                {
+                    var libc = NativeLibrary.Load(OperatingSystem.IsMacOS() ? "/usr/lib/libSystem.B.dylib" : "libc.so.6");
+                    _workerWaitStub = CreateWin64ToSysVThunk(NativeLibrary.GetExport(libc, "sem_wait"));
+                    _workerSignalStub = CreateWin64ToSysVThunk(NativeLibrary.GetExport(libc, "sem_post"));
+                    _workerExitStub = CreateWin64ToSysVThunk(NativeLibrary.GetExport(libc, "pthread_exit"));
+                }
+
+                waitStub = _workerWaitStub;
+                signalStub = _workerSignalStub;
+                exitStub = _workerExitStub;
+                return waitStub != 0 && signalStub != 0 && exitStub != 0;
+            }
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public static nint CreateWorkerEvent()

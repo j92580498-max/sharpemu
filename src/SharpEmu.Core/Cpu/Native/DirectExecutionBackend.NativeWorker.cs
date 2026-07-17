@@ -251,7 +251,21 @@ public sealed partial class DirectExecutionBackend
 
 		public static NativeGuestExecutor? TryCreate(DirectExecutionBackend backend)
 		{
-			if (OperatingSystem.IsWindows() && !EnsureKernel32Exports())
+			if (OperatingSystem.IsWindows())
+			{
+				if (!EnsureKernel32Exports())
+				{
+					return null;
+				}
+			}
+			else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+			{
+				if (!PosixHostStubs.TryCreateWorkerLoopStubs(out _waitForSingleObjectAddress, out _setEventAddress, out _exitThreadAddress))
+				{
+					return null;
+				}
+			}
+			else
 			{
 				return null;
 			}
