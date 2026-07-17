@@ -5039,7 +5039,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 			ActiveGuestThreadYieldReason = null;
 			try
 			{
-				var nativeReturn = CallNativeEntry(ptr);
+				var nativeReturn = RunGuestEntryStub(ptr, hostRspSlot);
 				if (ActiveGuestThreadYieldRequested)
 				{
 					reason = ActiveGuestThreadYieldReason ?? "guest thread blocked";
@@ -5207,7 +5207,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 			ActiveGuestThreadYieldReason = null;
 			try
 			{
-				var nativeReturn = CallNativeEntry(ptr);
+				var nativeReturn = RunGuestEntryStub(ptr, hostRspSlot);
 				if (ActiveGuestThreadYieldRequested)
 				{
 					reason = ActiveGuestThreadYieldReason ?? "guest thread blocked";
@@ -6167,6 +6167,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 		_runtimeSymbolsByName.Clear();
 		StopReadyThreadDispatcher();
 		StopStallWatchdog();
+		DisposeNativeGuestExecutors();
 		if (_exceptionHandler != 0)
 		{
 			RemoveVectoredExceptionHandler((void*)_exceptionHandler);

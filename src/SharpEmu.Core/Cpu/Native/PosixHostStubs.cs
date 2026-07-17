@@ -106,6 +106,73 @@ internal static unsafe class PosixHostStubs
         return true;
     }
 
+    public static nint CreateWorkerThread(nint entry, nint parameter, nuint stackReserveBytes, out uint threadId)
+    {
+        threadId = 0;
+        byte* attr = stackalloc byte[512];
+        if (pthread_attr_init(attr) != 0)
+        {
+            return 0;
+        }
+
+        try
+        {
+            _ = pthread_attr_setstacksize(attr, nuint.Max(stackReserveBytes, 512 * 1024));
+            nint thread;
+            if (pthread_create(&thread, attr, entry, parameter) != 0)
+            {
+                return 0;
+            }
+
+            threadId = unchecked((uint)thread);
+            var holder = (nint*)Marshal.AllocHGlobal(sizeof(nint) * 2);
+            holder[0] = thread;
+            holder[1] = 0;
+            return (nint)holder;
+        }
+        finally
+        {
+            _ = pthread_attr_destroy(attr);
+        }
+    }
+
+    public static bool WaitForWorkerThreadExit(nint threadHandle, uint timeoutMilliseconds)
+    {
+        var holder = (nint*)threadHandle;
+        if (holder == null || holder[1] != 0)
+        {
+            return holder != null;
+        }
+
+        var deadline = Environment.TickCount64 + timeoutMilliseconds;
+        while (pthread_kill(holder[0], 0) == 0)
+        {
+            if (Environment.TickCount64 >= deadline)
+            {
+                return false;
+            }
+            Thread.Sleep(1);
+        }
+
+        _ = pthread_join(holder[0], null);
+        holder[1] = 1;
+        return true;
+    }
+
+    public static void CloseWorkerThreadHandle(nint threadHandle)
+    {
+        var holder = (nint*)threadHandle;
+        if (holder == null)
+        {
+            return;
+        }
+        if (holder[1] == 0)
+        {
+            _ = pthread_detach(holder[0]);
+        }
+        Marshal.FreeHGlobal(threadHandle);
+    }
+
     public static void DestroyWorkerEvent(nint handle)
     {
         if (handle == 0)
@@ -386,6 +453,27 @@ internal static unsafe class PosixHostStubs
 
     [DllImport("libc", EntryPoint = "pthread_getspecific")]
     private static extern nint pthread_getspecific_linux(uint key);
+
+    [DllImport("libc")]
+    private static extern int pthread_attr_init(byte* attr);
+
+    [DllImport("libc")]
+    private static extern int pthread_attr_destroy(byte* attr);
+
+    [DllImport("libc")]
+    private static extern int pthread_attr_setstacksize(byte* attr, nuint stackSize);
+
+    [DllImport("libc")]
+    private static extern int pthread_create(nint* thread, byte* attr, nint startRoutine, nint arg);
+
+    [DllImport("libc")]
+    private static extern int pthread_join(nint thread, nint* returnValue);
+
+    [DllImport("libc")]
+    private static extern int pthread_detach(nint thread);
+
+    [DllImport("libc")]
+    private static extern int pthread_kill(nint thread, int signal);
 
     [DllImport("libc")]
     private static extern int pthread_threadid_np(nint thread, ulong* threadId);

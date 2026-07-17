@@ -37,6 +37,7 @@ public sealed partial class DirectExecutionBackend
 
 	private const uint StackSizeParamIsAReservation = 0x00010000u;
 
+
 	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern nint CreateThread(
 		nint lpThreadAttributes,
@@ -95,7 +96,7 @@ public sealed partial class DirectExecutionBackend
 		// NativeGuestExecutor emits a Win32 wait loop and creates it with
 		// kernel32!CreateThread. POSIX hosts use the established inline entry
 		// path until the worker loop has a pthread/eventfd implementation.
-		if (!OperatingSystem.IsWindows() || NativeGuestWorkersDisabled)
+		if (NativeGuestWorkersDisabled)
 		{
 			return null;
 		}
@@ -207,6 +208,7 @@ public sealed partial class DirectExecutionBackend
 		private void* _loopStub;
 		private nint _threadHandle;
 		private uint _nativeThreadId;
+		private bool _usesPosixThread;
 
 		// Single in-flight run; publication is ordered by the work/done event pair.
 		private CpuContext? _runContext;
@@ -400,13 +402,21 @@ public sealed partial class DirectExecutionBackend
 				return false;
 			}
 			FlushInstructionCache(GetCurrentProcess(), _loopStub, LoopStubSize);
-			_threadHandle = CreateThread(
-				0,
-				WorkerStackReservation,
-				(nint)_loopStub,
-				0,
-				StackSizeParamIsAReservation,
-				out _nativeThreadId);
+			if (OperatingSystem.IsWindows())
+			{
+				_threadHandle = CreateThread(
+					0,
+					WorkerStackReservation,
+					(nint)_loopStub,
+					0,
+					StackSizeParamIsAReservation,
+					out _nativeThreadId);
+			}
+			else
+			{
+				_threadHandle = PosixHostStubs.CreateWorkerThread((nint)_loopStub, 0, WorkerStackReservation, out _nativeThreadId);
+				_usesPosixThread = _threadHandle != 0;
+			}
 			if (_threadHandle == 0)
 			{
 				return false;
@@ -616,8 +626,17 @@ public sealed partial class DirectExecutionBackend
 			var exited = _threadHandle == 0;
 			if (_threadHandle != 0)
 			{
-				exited = WaitForSingleObject(_threadHandle, 1000u) == 0u;
-				CloseHandle(_threadHandle);
+				exited = _usesPosixThread
+					? PosixHostStubs.WaitForWorkerThreadExit(_threadHandle, 1000u)
+					: WaitForSingleObject(_threadHandle, 1000u) == 0u;
+				if (_usesPosixThread)
+				{
+					PosixHostStubs.CloseWorkerThreadHandle(_threadHandle);
+				}
+				else
+				{
+					CloseHandle(_threadHandle);
+				}
 				_threadHandle = 0;
 			}
 			if (!exited)
