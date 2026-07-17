@@ -57,7 +57,7 @@ public sealed unsafe partial class DirectExecutionBackend
 	// against the x86-64 platform headers.
 	private static readonly int[] PosixRegisterOffsets = OperatingSystem.IsMacOS()
 		? new[] { 16, 32, 40, 24, 72, 64, 56, 48, 80, 88, 96, 104, 112, 120, 128, 136, 144 }
-		: new[] { 128, 136, 144, 152, 120, 160, 72, 64, 0, 8, 16, 24, 32, 40, 48, 56, 128 };
+		: new[] { 104, 112, 96, 88, 120, 80, 72, 64, 0, 8, 16, 24, 32, 40, 48, 56, 128 };
 
 	private static DirectExecutionBackend? _posixSignalBackend;
 	private static bool _posixSignalHandlersInstalled;

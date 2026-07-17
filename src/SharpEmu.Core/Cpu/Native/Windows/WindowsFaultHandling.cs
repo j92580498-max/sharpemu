@@ -45,7 +45,13 @@ internal sealed unsafe partial class WindowsFaultHandling : IHostFaultHandling
         // returned CONTINUE_SEARCH for them.
         ReadOnlySpan<uint> nonManagedExceptionCodes =
             [WindowsFaultCodes.ClrManagedException, 0xE06D7363u, WindowsFaultCodes.FastFail, WindowsFaultCodes.StackOverflow];
+        EmitByte(code, ref offset, 0x48); EmitByte(code, ref offset, 0x85); EmitByte(code, ref offset, 0xC9); // test rcx, rcx
+        EmitByte(code, ref offset, 0x74); EmitByte(code, ref offset, 0x00);                                   // je pass (null EXCEPTION_POINTERS)
+        int nullPointersJump = offset - 1;
         EmitByte(code, ref offset, 0x48); EmitByte(code, ref offset, 0x8B); EmitByte(code, ref offset, 0x01); // mov rax, [rcx] (ExceptionRecord*)
+        EmitByte(code, ref offset, 0x48); EmitByte(code, ref offset, 0x85); EmitByte(code, ref offset, 0xC0); // test rax, rax
+        EmitByte(code, ref offset, 0x74); EmitByte(code, ref offset, 0x00);                                   // je pass (null ExceptionRecord)
+        int nullRecordJump = offset - 1;
         EmitByte(code, ref offset, 0x8B); EmitByte(code, ref offset, 0x00);                                   // mov eax, [rax] (ExceptionCode)
         var passJumpOffsets = stackalloc int[nonManagedExceptionCodes.Length];
         for (int i = 0; i < nonManagedExceptionCodes.Length; i++)
@@ -58,6 +64,8 @@ internal sealed unsafe partial class WindowsFaultHandling : IHostFaultHandling
         }
         EmitByte(code, ref offset, 0xEB); EmitByte(code, ref offset, 0x03);                                   // jmp over pass block
         int passOffset = offset;
+        code[nullPointersJump] = checked((byte)(passOffset - (nullPointersJump + 1)));
+        code[nullRecordJump] = checked((byte)(passOffset - (nullRecordJump + 1)));
         EmitByte(code, ref offset, 0x31); EmitByte(code, ref offset, 0xC0);                                   // pass: xor eax, eax (EXCEPTION_CONTINUE_SEARCH)
         EmitByte(code, ref offset, 0xC3);                                                                     // ret
         for (int i = 0; i < nonManagedExceptionCodes.Length; i++)

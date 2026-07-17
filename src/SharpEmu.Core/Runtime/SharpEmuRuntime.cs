@@ -792,7 +792,7 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
         for (var i = 0; i < image.ImportedRelocations.Count; i++)
         {
             var relocation = image.ImportedRelocations[i];
-            if (!relocation.IsData)
+            if (!relocation.IsData && !HleDataSymbols.TryGetAddress(relocation.Nid, out _))
             {
                 continue;
             }
