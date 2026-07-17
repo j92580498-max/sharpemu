@@ -3559,8 +3559,16 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 		return ThreadPriority.Normal;
 	}
 
+	private static readonly bool RespectGuestThreadAffinity =
+		string.Equals(Environment.GetEnvironmentVariable("SHARPEMU_RESPECT_GUEST_AFFINITY"), "1", StringComparison.Ordinal);
+
 	private void ApplyGuestThreadAffinity(ulong guestAffinityMask)
 	{
+		if (!RespectGuestThreadAffinity)
+		{
+			return;
+		}
+
 		var hostAffinityMask = MapGuestThreadAffinity(guestAffinityMask);
 		if (hostAffinityMask == 0)
 		{
