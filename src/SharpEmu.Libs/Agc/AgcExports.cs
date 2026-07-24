@@ -995,8 +995,8 @@ public static partial class AgcExports
             (psWord & 0x0040_0000u) != 0 || (psWord & 0x0100_0000u) != 0
                 ? 0x0000_0400u
                 : 0u;
-        value &= ~0x0000_001Fu;
-        value |= (gsWord >> 8) & 0x1Fu;
+        value &= ~0x0000_003Fu;
+        value |= (gsWord >> 8) & 0x3Fu;
         value &= ~0x0000_0400u;
         value |= flatShade;
         return ApplyInterpolantDefaultValue(value, psWord);
@@ -1004,7 +1004,7 @@ public static partial class AgcExports
 
     private static uint CreateInterpolantDefaultParamValue(uint value, uint psWord)
     {
-        value &= ~0x0000_001Fu;
+        value &= ~0x0000_003Fu;
         value &= ~0x0000_0400u;
         return ApplyInterpolantDefaultValue(value, psWord);
     }
